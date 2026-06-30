@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title or 'Geo Map' }}</title>
+<script src="https://unpkg.com/maplibre-gl@4.5.2/dist/maplibre-gl.js"></script>
+<link href="https://unpkg.com/maplibre-gl@4.5.2/dist/maplibre-gl.css" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; background: {{ background_color }}; }
+  #map { position: absolute; top: 0; bottom: 0; width: 100%; height: 100%; }
+  .tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: rgba(0,0,0,0.75);
+    color: #fff;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font: 13px/1.4 sans-serif;
+    max-width: 220px;
+    display: none;
+  }
+  .legend {
+    position: absolute;
+    padding: 10px 14px;
+    background: rgba(255,255,255,0.92);
+    border-radius: 4px;
+    font: 12px/1.5 sans-serif;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+    {{ legend_css_position }}
+  }
+  .legend-title { font-weight: bold; margin-bottom: 6px; }
+  .legend-bar {
+    width: 160px;
+    height: 14px;
+    background: linear-gradient(to right, {{ gradient_colors }});
+    border-radius: 2px;
+  }
+  .legend-labels {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 3px;
+    color: #555;
+  }
+  .no-data-swatch {
+    display: inline-block;
+    width: 14px; height: 14px;
+    background: {{ no_data_color }};
+    border: 1px solid #aaa;
+    vertical-align: middle;
+    margin-right: 4px;
+    border-radius: 2px;
+  }
+  .no-data-row { margin-top: 6px; color: #555; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="tooltip" id="tooltip"></div>
+{% if show_legend %}
+<div class="legend" id="legend">
+  {% if title %}<div class="legend-title">{{ title }}</div>{% endif %}
+  <div class="legend-bar"></div>
+  <div class="legend-labels">
+    <span>{{ vmin_label }}</span>
+    <span>{{ vmax_label }}</span>
+  </div>
+  {% if has_no_data %}
+  <div class="no-data-row"><span class="no-data-swatch"></span>No data</div>
+  {% endif %}
+</div>
+{% endif %}
+<script>
+(function() {
+  const GEODATA = {{ geojson_str }};
+  const COLOR_STOPS = {{ color_stops_json }};
+  const NO_DATA_COLOR = {{ no_data_color | tojson }};
+  const BORDER_COLOR = {{ border_color | tojson }};
+  const BORDER_WIDTH = {{ border_width }};
+  const VALUE_FORMAT = {{ value_format | tojson }};
+  const VALUE_LABEL = {{ value_label | tojson }};
+
+  const map = new maplibregl.Map({
+    container: 'map',
+    style: 'https://basemaps.cartocdn.com/gl/light-nolabels-gl-style/style.json',
+    bounds: {{ bounds_json }},
+    fitBoundsOptions: { padding: 40, animate: false },
+  });
+
+  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+
+  map.on('load', function () {
+    map.addSource('geo', { type: 'geojson', data: GEODATA, generateId: true });
+
+    const colorExpr = COLOR_STOPS.length >= 2
+      ? ['case',
+          ['==', ['get', '_value'], null],
+          NO_DATA_COLOR,
+          ['interpolate', ['linear'], ['coalesce', ['get', '_value'], -1e9], ...COLOR_STOPS.flat()]
+        ]
+      : NO_DATA_COLOR;
+
+    map.addLayer({
+      id: 'geo-fill',
+      type: 'fill',
+      source: 'geo',
+      paint: {
+        'fill-color': colorExpr,
+        'fill-opacity': 0.82,
+      }
+    });
+
+    map.addLayer({
+      id: 'geo-line',
+      type: 'line',
+      source: 'geo',
+      paint: {
+        'line-color': BORDER_COLOR,
+        'line-width': BORDER_WIDTH,
+      }
+    });
+
+    map.addLayer({
+      id: 'geo-hover',
+      type: 'fill',
+      source: 'geo',
+      paint: {
+        'fill-color': '#000',
+        'fill-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.15, 0],
+      }
+    });
+
+    let hoveredId = null;
+    const tooltip = document.getElementById('tooltip');
+
+    map.on('mousemove', 'geo-fill', function (e) {
+      if (!e.features.length) return;
+      map.getCanvas().style.cursor = 'pointer';
+
+      if (hoveredId !== null) {
+        map.setFeatureState({ source: 'geo', id: hoveredId }, { hover: false });
+      }
+      hoveredId = e.features[0].id;
+      map.setFeatureState({ source: 'geo', id: hoveredId }, { hover: true });
+
+      const p = e.features[0].properties;
+      const name = p.namn || p.valdistrikt_kod || p.kommun_kod || p.lan_kod || '';
+      let valueStr = 'No data';
+      if (p._value !== null && p._value !== undefined) {
+        valueStr = parseFloat(p._value).toFixed(1) + (VALUE_LABEL ? ' ' + VALUE_LABEL : '');
+      }
+      tooltip.innerHTML = '<strong>' + name + '</strong><br>' + valueStr;
+      tooltip.style.display = 'block';
+      tooltip.style.left = (e.point.x + 14) + 'px';
+      tooltip.style.top = (e.point.y - 10) + 'px';
+    });
+
+    map.on('mouseleave', 'geo-fill', function () {
+      map.getCanvas().style.cursor = '';
+      if (hoveredId !== null) {
+        map.setFeatureState({ source: 'geo', id: hoveredId }, { hover: false });
+        hoveredId = null;
+      }
+      tooltip.style.display = 'none';
+    });
+  });
+})();
+</script>
+</body>
+</html>

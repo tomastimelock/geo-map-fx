@@ -1,0 +1,65 @@
+[build-system]
+requires = ["hatchling >= 1.21"]
+build-backend = "hatchling.build"
+
+[project]
+name = "geo-map-fx"
+version = "0.1.0"
+description = "Geographic choropleth map renderer — static PNG/SVG and interactive HTML from {region_id: value} dicts"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+  { name = "Trollfabriken AITrix AB", email = "dev@trollfabriken.se" },
+]
+keywords = ["gis", "choropleth", "map", "sweden", "municipalities", "geojson", "visualization", "maplibre"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Multimedia :: Graphics",
+  "Topic :: Scientific/Engineering :: GIS",
+  "Operating System :: OS Independent",
+]
+dependencies = [
+  "pydantic >= 2.5",
+  "geopandas >= 0.14",
+  "matplotlib >= 3.8",
+  "shapely >= 2.0",
+  "numpy >= 1.24",
+  "Pillow >= 10.0",
+  "jinja2 >= 3.1",
+  "pyproj >= 3.6",
+]
+
+[project.optional-dependencies]
+tiles = ["contextily >= 1.6"]
+dev = ["pytest >= 7", "ruff >= 0.4", "build"]
+
+[project.scripts]
+geo-map-fx = "geo_map_fx.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/tomastimelock/geo-map-fx"
+Source   = "https://github.com/tomastimelock/geo-map-fx"
+Issues   = "https://github.com/tomastimelock/geo-map-fx/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/geo_map_fx"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "RUF"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
